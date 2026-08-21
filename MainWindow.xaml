@@ -1,0 +1,42 @@
+<Window x:Class="TikTokGPMTool.MainWindow" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" Title="TikTok GPM Automation" Height="900" Width="1250" WindowStartupLocation="CenterScreen" Background="#17141F" Foreground="White">
+ <Window.Resources>
+  <Style TargetType="TextBox"><Setter Property="Margin" Value="4"/><Setter Property="Padding" Value="7"/><Setter Property="Background" Value="#292433"/><Setter Property="Foreground" Value="White"/></Style>
+  <Style TargetType="Button"><Setter Property="Margin" Value="4"/><Setter Property="Padding" Value="12,7"/></Style>
+  <Style TargetType="Label"><Setter Property="Foreground" Value="White"/><Setter Property="VerticalAlignment" Value="Center"/></Style>
+  <Style TargetType="GroupBox"><Setter Property="Foreground" Value="White"/><Setter Property="Margin" Value="8"/><Setter Property="Padding" Value="8"/></Style>
+ </Window.Resources>
+ <Grid Margin="10"><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+  <GroupBox Header="Kết nối GPM"><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="220"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+   <Label Content="API URL"/><TextBox Grid.Column="1" Text="{Binding Settings.ApiGpmUrl,UpdateSourceTrigger=PropertyChanged}"/><Button Grid.Column="2" Content="Tải / Refresh" Command="{Binding RefreshGpmCommand}"/>
+   <ComboBox Grid.Column="3" Margin="5" ItemsSource="{Binding Groups}" SelectedItem="{Binding SelectedGroup}" DisplayMemberPath="Name"/><Button Grid.Column="4" Content="Chọn / bỏ tất cả" Command="{Binding SelectAllCommand}"/>
+  </Grid></GroupBox>
+  <Grid Grid.Row="1"><Grid.ColumnDefinitions><ColumnDefinition Width="3*"/><ColumnDefinition Width="2*"/></Grid.ColumnDefinitions>
+   <GroupBox Header="Profile trong group"><DataGrid ItemsSource="{Binding VisibleProfiles}" AutoGenerateColumns="False" CanUserAddRows="False" Background="#211D2A" Foreground="White" RowBackground="#211D2A" AlternatingRowBackground="#2A2534">
+    <DataGrid.Columns><DataGridCheckBoxColumn Header="Chọn" Binding="{Binding IsSelected}" Width="60"/><DataGridTextColumn Header="Tên profile" Binding="{Binding Name}" Width="2*" IsReadOnly="True"/><DataGridTextColumn Header="Group" Binding="{Binding Group}" Width="*" IsReadOnly="True"/><DataGridTextColumn Header="Proxy" Binding="{Binding Proxy}" Width="*" IsReadOnly="True"/><DataGridTextColumn Header="Trạng thái" Binding="{Binding Status}" Width="2*" IsReadOnly="True"/></DataGrid.Columns>
+   </DataGrid></GroupBox>
+   <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto"><StackPanel>
+    <GroupBox Header="Chế độ chạy"><Grid><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="80"/><ColumnDefinition/><ColumnDefinition Width="80"/></Grid.ColumnDefinitions><Grid.RowDefinitions><RowDefinition/><RowDefinition/></Grid.RowDefinitions>
+     <CheckBox Content="Nuôi New Feed" IsChecked="{Binding Settings.EnableNewFeed}" Foreground="White" VerticalAlignment="Center"/><Label Grid.Column="2" Content="Số video Feed"/><TextBox Grid.Column="3" Text="{Binding Settings.FeedVideos}"/>
+     <CheckBox Grid.Row="1" Content="Search + Reply" IsChecked="{Binding Settings.EnableSearch}" Foreground="White" VerticalAlignment="Center"/><Label Grid.Row="1" Grid.Column="2" Content="Bỏ qua nhanh %"/><TextBox Grid.Row="1" Grid.Column="3" Text="{Binding Settings.QuickSkipChance}"/>
+    </Grid></GroupBox>
+    <GroupBox Header="Chiến dịch"><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="90"/><ColumnDefinition Width="*"/><ColumnDefinition Width="90"/></Grid.ColumnDefinitions><Grid.RowDefinitions><RowDefinition/><RowDefinition/><RowDefinition/><RowDefinition/><RowDefinition/></Grid.RowDefinitions>
+     <Button Grid.ColumnSpan="2" Content="Mở file từ khóa" Command="{Binding OpenKeywordFileCommand}"/><Button Grid.Column="2" Grid.ColumnSpan="2" Content="Mở file reply" Command="{Binding OpenReplyFileCommand}"/>
+     <Label Grid.Row="1" Content="Số luồng"/><TextBox Grid.Row="1" Grid.Column="1" Text="{Binding Settings.Threads}"/><Label Grid.Row="1" Grid.Column="2" Content="Scale"/><TextBox Grid.Row="1" Grid.Column="3" Text="{Binding Settings.Scale}"/>
+     <Label Grid.Row="2" Content="Video/profile"/><TextBox Grid.Row="2" Grid.Column="1" Text="{Binding Settings.MaxVideos}"/><Label Grid.Row="2" Grid.Column="2" Content="Reply/profile"/><TextBox Grid.Row="2" Grid.Column="3" Text="{Binding Settings.MaxReplies}"/>
+     <Label Grid.Row="3" Content="Xem min (giây)"/><TextBox Grid.Row="3" Grid.Column="1" Text="{Binding Settings.MinWatchSeconds}"/><Label Grid.Row="3" Grid.Column="2" Content="Xem max"/><TextBox Grid.Row="3" Grid.Column="3" Text="{Binding Settings.MaxWatchSeconds}"/>
+     <Label Grid.Row="4" Content="Nghỉ min"/><TextBox Grid.Row="4" Grid.Column="1" Text="{Binding Settings.MinPauseSeconds}"/><Label Grid.Row="4" Grid.Column="2" Content="Nghỉ max"/><TextBox Grid.Row="4" Grid.Column="3" Text="{Binding Settings.MaxPauseSeconds}"/>
+    </Grid></GroupBox>
+    <GroupBox Header="Xác suất (%) / quota"><Grid><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="75"/><ColumnDefinition Width="75"/></Grid.ColumnDefinitions><Grid.RowDefinitions><RowDefinition/><RowDefinition/><RowDefinition/><RowDefinition/><RowDefinition/><RowDefinition/></Grid.RowDefinitions>
+     <Label Grid.Column="1" Content="Tỷ lệ"/><Label Grid.Column="2" Content="Quota"/>
+     <Label Grid.Row="1" Content="Mở profile"/><TextBox Grid.Row="1" Grid.Column="1" Text="{Binding Settings.OpenProfileChance}"/><TextBox Grid.Row="1" Grid.Column="2" Text="{Binding Settings.OpenProfileQuota}"/>
+     <Label Grid.Row="2" Content="Like"/><TextBox Grid.Row="2" Grid.Column="1" Text="{Binding Settings.LikeChance}"/><TextBox Grid.Row="2" Grid.Column="2" Text="{Binding Settings.LikeQuota}"/>
+     <Label Grid.Row="3" Content="Follow"/><TextBox Grid.Row="3" Grid.Column="1" Text="{Binding Settings.FollowChance}"/><TextBox Grid.Row="3" Grid.Column="2" Text="{Binding Settings.FollowQuota}"/>
+     <Label Grid.Row="4" Content="Favorite"/><TextBox Grid.Row="4" Grid.Column="1" Text="{Binding Settings.FavoriteChance}"/><TextBox Grid.Row="4" Grid.Column="2" Text="{Binding Settings.FavoriteQuota}"/>
+     <Label Grid.Row="5" Content="Reply"/><TextBox Grid.Row="5" Grid.Column="1" Text="{Binding Settings.ReplyChance}"/><Label Grid.Row="5" Grid.Column="2" Content="Quota trên"/>
+    </Grid></GroupBox>
+    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center"><Button Content="START" Background="Green" Foreground="White" Command="{Binding StartCommand}"/><Button Content="STOP" Background="DarkRed" Foreground="White" Command="{Binding StopCommand}"/></StackPanel>
+   </StackPanel></ScrollViewer>
+  </Grid>
+  <Border Grid.Row="2" Background="#292433" Padding="10"><StackPanel Orientation="Horizontal"><TextBlock Text="{Binding Message}" Width="650"/><TextBlock Text="Thành công: "/><TextBlock Text="{Binding Success}" Foreground="LawnGreen"/><TextBlock Text="   Lỗi: "/><TextBlock Text="{Binding Fail}" Foreground="OrangeRed"/><TextBlock Text="   Bỏ qua: "/><TextBlock Text="{Binding Skipped}"/><TextBlock Text="   Reply: "/><TextBlock Text="{Binding Replies}" Foreground="DeepSkyBlue"/></StackPanel></Border>
+ </Grid>
+</Window>
