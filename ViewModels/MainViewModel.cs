@@ -16,11 +16,13 @@ public sealed class MainViewModel : INotifyPropertyChanged
     private const string SettingsPath = "appsettings.json";
     private readonly IGpmProfileService _gpm;
     private readonly ICampaignRunner _runner;
+    private readonly IFacebookScanRunner _facebookRunner;
     private CancellationTokenSource? _cts;
     private bool _isRunning;
     private GpmGroupModel? _selectedGroup;
     private string _message = "Sẵn sàng";
-    private int _success, _fail, _skipped, _replies;
+    private int _success, _fail, _skipped, _replies, _facebookAdded, _facebookDuplicate, _facebookSkipped, _facebookFailed;
+
     public TikTokCampaignSettings Settings { get; private set; }
     public ObservableCollection<GpmGroupModel> Groups { get; } = [];
     public ObservableCollection<GpmProfileModel> Profiles { get; } = [];
@@ -32,47 +34,71 @@ public sealed class MainViewModel : INotifyPropertyChanged
     public int Fail { get => _fail; set { _fail = value; Changed(); } }
     public int Skipped { get => _skipped; set { _skipped = value; Changed(); } }
     public int Replies { get => _replies; set { _replies = value; Changed(); } }
+    public int FacebookAdded { get => _facebookAdded; set { _facebookAdded = value; Changed(); } }
+    public int FacebookDuplicate { get => _facebookDuplicate; set { _facebookDuplicate = value; Changed(); } }
+    public int FacebookSkipped { get => _facebookSkipped; set { _facebookSkipped = value; Changed(); } }
+    public int FacebookFailed { get => _facebookFailed; set { _facebookFailed = value; Changed(); } }
+
     public ICommand RefreshGpmCommand { get; }
     public ICommand StartCommand { get; }
+    public ICommand StartFacebookCommand { get; }
     public ICommand StopCommand { get; }
     public ICommand SelectAllCommand { get; }
     public ICommand OpenKeywordFileCommand { get; }
     public ICommand OpenReplyFileCommand { get; }
+    public ICommand OpenFacebookOutputCommand { get; }
 
-    public MainViewModel(IGpmProfileService gpm, ICampaignRunner runner)
+    public MainViewModel(IGpmProfileService gpm, ICampaignRunner runner, IFacebookScanRunner facebookRunner)
     {
-        _gpm = gpm; _runner = runner; Settings = LoadSettings(); EnsureInputFiles();
+        _gpm = gpm; _runner = runner; _facebookRunner = facebookRunner; Settings = LoadSettings(); EnsureFiles();
         RefreshGpmCommand = new AsyncRelayCommand(RefreshGpmAsync, () => !IsRunning);
-        StartCommand = new AsyncRelayCommand(StartAsync, () => !IsRunning);
+        StartCommand = new AsyncRelayCommand(StartTikTokAsync, () => !IsRunning);
+        StartFacebookCommand = new AsyncRelayCommand(StartFacebookAsync, () => !IsRunning);
         StopCommand = new RelayCommand<object>(_ => IsRunning, _ => Stop());
         SelectAllCommand = new RelayCommand<object>(_ => !IsRunning && VisibleProfiles.Count > 0, _ => SelectAll());
         OpenKeywordFileCommand = new RelayCommand<object>(_ => true, _ => OpenFile(Settings.KeywordFile));
         OpenReplyFileCommand = new RelayCommand<object>(_ => true, _ => OpenFile(Settings.ReplyFile));
+        OpenFacebookOutputCommand = new RelayCommand<object>(_ => true, _ => OpenFile(Settings.Facebook.OutputFile));
     }
+
     private async Task RefreshGpmAsync()
     {
         try
         {
-            Message = "Đang tải profile GPM...";
-            var profiles = await _gpm.GetProfilesAsync(Settings.ApiGpmUrl);
-            Profiles.Clear(); foreach (var p in profiles) Profiles.Add(p);
-            Groups.Clear(); foreach (var g in profiles.Select(x => x.Group).Append("All").Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(x => x)) Groups.Add(new() { Name = g });
-            SelectedGroup = Groups.FirstOrDefault(x => x.Name == "All") ?? Groups.FirstOrDefault();
-            Message = $"Đã tải {Profiles.Count} profile từ GPM";
+            Message = "Đang tải profile GPM..."; var profiles = await _gpm.GetProfilesAsync(Settings.ApiGpmUrl);
+            Profiles.Clear(); foreach (var profile in profiles) Profiles.Add(profile);
+            Groups.Clear(); foreach (var group in profiles.Select(x => x.Group).Append("All").Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(x => x)) Groups.Add(new() { Name = group });
+            SelectedGroup = Groups.FirstOrDefault(x => x.Name == "All") ?? Groups.FirstOrDefault(); Message = $"Đã tải {Profiles.Count} profile từ GPM";
         }
         catch (Exception ex) { MessageBox.Show(ex.Message, "Lỗi GPM", MessageBoxButton.OK, MessageBoxImage.Error); Message = ex.Message; }
     }
-    private async Task StartAsync()
+
+    private async Task StartTikTokAsync()
     {
-        var selected = VisibleProfiles.Where(x => x.IsSelected).ToList(); var keywords = ReadDistinct(Settings.KeywordFile); var replies = ReadDistinct(Settings.ReplyFile);
-        var error = Validate(selected.Count, keywords.Count, replies.Count); if (error != null) { MessageBox.Show(error, "Cấu hình chưa hợp lệ", MessageBoxButton.OK, MessageBoxImage.Warning); return; }
-        SaveSettings(); Success = Fail = Skipped = Replies = 0; IsRunning = true; _cts = new();
+        var selected = SelectedProfiles(); var keywords = ReadDistinct(Settings.KeywordFile); var replies = ReadDistinct(Settings.ReplyFile);
+        var error = ValidateTikTok(selected.Count, keywords.Count, replies.Count); if (ShowValidation(error)) return;
+        SaveSettings(); Success = Fail = Skipped = Replies = 0; BeginRun();
         var progress = new Progress<CampaignProgress>(p => { Success += p.Success; Fail += p.Failed; Skipped += p.Skipped; Replies += p.Replies; Message = p.Message; });
-        try { await _runner.RunAsync(selected, keywords, replies, Settings, progress, _cts.Token); }
-        catch (OperationCanceledException) { Message = "Đã dừng chiến dịch"; }
-        finally { IsRunning = false; _cts.Dispose(); _cts = null; }
+        try { await _runner.RunAsync(selected, keywords, replies, Settings, progress, _cts!.Token); }
+        catch (OperationCanceledException) { Message = "Đã dừng chiến dịch TikTok"; }
+        finally { EndRun(); }
     }
-    private string? Validate(int profiles, int keywords, int replies)
+
+    private async Task StartFacebookAsync()
+    {
+        var selected = SelectedProfiles(); var groups = ParseFacebookGroups(Settings.Facebook.GroupList);
+        string? error = selected.Count == 0 ? "Hãy chọn ít nhất một profile GPM đã đăng nhập Facebook."
+            : groups.Count == 0 ? "Danh sách group không có ID, slug hoặc URL hợp lệ."
+            : Settings.Facebook.MaxUidPerGroup <= 0 ? "Max UID/group phải lớn hơn 0." : null;
+        if (ShowValidation(error)) return;
+        SaveSettings(); FacebookAdded = FacebookDuplicate = FacebookSkipped = FacebookFailed = 0; BeginRun();
+        var progress = new Progress<FacebookScanProgress>(p => { FacebookAdded += p.Added; FacebookDuplicate += p.Duplicate; FacebookSkipped += p.Skipped; FacebookFailed += p.Failed; Message = p.Message; });
+        try { await _facebookRunner.RunAsync(selected, groups, Settings.Threads, Settings.Scale, Settings.ApiGpmUrl, Settings.Facebook, progress, _cts!.Token); }
+        catch (OperationCanceledException) { Message = "Đã dừng quét Facebook"; }
+        finally { EndRun(); }
+    }
+
+    private string? ValidateTikTok(int profiles, int keywords, int replies)
     {
         if (profiles == 0) return "Hãy chọn ít nhất một profile GPM.";
         if (!Settings.EnableNewFeed && !Settings.EnableSearch) return "Hãy bật New Feed hoặc Search + Reply.";
@@ -83,15 +109,24 @@ public sealed class MainViewModel : INotifyPropertyChanged
         if (new[] { Settings.OpenProfileChance, Settings.LikeChance, Settings.FollowChance, Settings.FavoriteChance, Settings.ReplyChance, Settings.QuickSkipChance }.Any(x => x < 0 || x > 100)) return "Xác suất phải nằm trong khoảng 0–100%.";
         return new[] { Settings.OpenProfileQuota, Settings.LikeQuota, Settings.FollowQuota, Settings.FavoriteQuota }.Any(x => x < 0) ? "Quota không được âm." : null;
     }
-    private void FilterProfiles() { VisibleProfiles.Clear(); var list = SelectedGroup?.Name == "All" ? Profiles : Profiles.Where(x => x.Group == SelectedGroup?.Name); foreach (var p in list) VisibleProfiles.Add(p); }
-    private void SelectAll() { var value = VisibleProfiles.Any(x => !x.IsSelected); foreach (var p in VisibleProfiles) p.IsSelected = value; }
+
+    public static IReadOnlyList<FacebookGroupInput> ParseFacebookGroups(string input) => input.Replace("\r", "").Split('\n')
+        .Select(x => FacebookGroupInput.TryParse(x, out var group) ? group : null).Where(x => x != null)
+        .DistinctBy(x => x!.Key, StringComparer.OrdinalIgnoreCase).Cast<FacebookGroupInput>().ToList();
+    private List<GpmProfileModel> SelectedProfiles() => VisibleProfiles.Where(x => x.IsSelected).ToList();
+    private bool ShowValidation(string? error) { if (error == null) return false; MessageBox.Show(error, "Cấu hình chưa hợp lệ", MessageBoxButton.OK, MessageBoxImage.Warning); return true; }
+    private void BeginRun() { IsRunning = true; _cts = new(); }
+    private void EndRun() { IsRunning = false; _cts?.Dispose(); _cts = null; }
     private void Stop() { Message = "Đang dừng an toàn..."; _cts?.Cancel(); }
+    private void FilterProfiles() { VisibleProfiles.Clear(); var list = SelectedGroup?.Name == "All" ? Profiles : Profiles.Where(x => x.Group == SelectedGroup?.Name); foreach (var profile in list) VisibleProfiles.Add(profile); }
+    private void SelectAll() { var value = VisibleProfiles.Any(x => !x.IsSelected); foreach (var profile in VisibleProfiles) profile.IsSelected = value; }
     private static List<string> ReadDistinct(string path) => File.ReadAllLines(path, System.Text.Encoding.UTF8).Select(x => x.Trim()).Where(x => x.Length > 0).Distinct().ToList();
-    private static void OpenFile(string path) => Process.Start(new ProcessStartInfo(Path.GetFullPath(path)) { UseShellExecute = true });
-    private static void EnsureInputFiles() { Directory.CreateDirectory("Input"); foreach (var p in new[] { "Input/Keywords.txt", "Input/Replies.txt" }) if (!File.Exists(p)) File.WriteAllText(p, "", System.Text.Encoding.UTF8); }
-    private TikTokCampaignSettings LoadSettings() { try { return File.Exists(SettingsPath) ? JsonConvert.DeserializeObject<TikTokCampaignSettings>(File.ReadAllText(SettingsPath)) ?? new() : new(); } catch { return new(); } }
+    private static void OpenFile(string path) { Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path))!); if (!File.Exists(path)) File.WriteAllText(path, ""); Process.Start(new ProcessStartInfo(Path.GetFullPath(path)) { UseShellExecute = true }); }
+    private static void EnsureFiles() { Directory.CreateDirectory("Input"); Directory.CreateDirectory("Output"); foreach (var path in new[] { "Input/Keywords.txt", "Input/Replies.txt", "Output/FacebookUIDs.txt" }) if (!File.Exists(path)) File.WriteAllText(path, "", System.Text.Encoding.UTF8); }
+    private TikTokCampaignSettings LoadSettings() { try { var value = File.Exists(SettingsPath) ? JsonConvert.DeserializeObject<TikTokCampaignSettings>(File.ReadAllText(SettingsPath)) : null; value ??= new(); value.Facebook ??= new(); return value; } catch { return new(); } }
     private void SaveSettings() => File.WriteAllText(SettingsPath, JsonConvert.SerializeObject(Settings, Formatting.Indented));
-    public event PropertyChangedEventHandler? PropertyChanged; private void Changed([CallerMemberName] string? name = null) => PropertyChanged?.Invoke(this, new(name));
+    public event PropertyChangedEventHandler? PropertyChanged;
+    private void Changed([CallerMemberName] string? name = null) => PropertyChanged?.Invoke(this, new(name));
 }
 
 public sealed class AsyncRelayCommand : ICommand

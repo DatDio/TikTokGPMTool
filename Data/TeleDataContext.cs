@@ -16,6 +16,7 @@ namespace TikTokGPMTool.Data
 		}
 		public DbSet<Account> Accounts { get; set; }
 		public DbSet<TikTokActionHistory> TikTokActionHistories { get; set; }
+		public DbSet<FacebookGroupScanHistory> FacebookGroupScanHistories { get; set; }
 		protected override void OnModelCreating(ModelBuilder modelBuilder)
 		{
 			modelBuilder.Entity<Account>(entity =>
@@ -38,6 +39,14 @@ namespace TikTokGPMTool.Data
 				entity.HasIndex(x => new { x.GpmProfileId, x.VideoId, x.ActionType }).IsUnique();
 				entity.Property(x => x.GpmProfileId).IsRequired();
 				entity.Property(x => x.VideoId).IsRequired();
+			});
+			modelBuilder.Entity<FacebookGroupScanHistory>(entity =>
+			{
+				entity.HasKey(x => x.Id);
+				entity.HasIndex(x => new { x.GroupKey, x.FacebookUid }).IsUnique();
+				entity.Property(x => x.GroupKey).IsRequired();
+				entity.Property(x => x.GpmProfileId).IsRequired();
+				entity.Property(x => x.FacebookUid).IsRequired();
 			});
 		}
 	}

@@ -28,6 +28,7 @@ public enum TikTokActionResult { Success, Failed, Skipped }
 
 public sealed class TikTokCampaignSettings
 {
+    public FacebookScanSettings Facebook { get; set; } = new();
     public string ApiGpmUrl { get; set; } = "http://127.0.0.1:19995";
     public string KeywordFile { get; set; } = "Input/Keywords.txt";
     public string ReplyFile { get; set; } = "Input/Replies.txt";

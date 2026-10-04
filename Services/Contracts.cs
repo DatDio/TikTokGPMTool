@@ -31,6 +31,24 @@ public interface ICampaignRunner
         CancellationToken token);
 }
 
+public interface IFacebookUidStore
+{
+    Task<bool> TryAddAsync(string groupKey, string profileId, FacebookUidResult uid, CancellationToken token);
+}
+
+public interface IFacebookGroupScanner
+{
+    Task<FacebookGroupScanResult> ScanGroupAsync(GpmBrowserSession session, GpmProfileModel profile,
+        FacebookGroupInput group, FacebookScanSettings settings, CancellationToken token);
+}
+
+public interface IFacebookScanRunner
+{
+    Task RunAsync(IReadOnlyList<GpmProfileModel> profiles, IReadOnlyList<FacebookGroupInput> groups,
+        int threads, double scale, string apiUrl, FacebookScanSettings settings,
+        IProgress<FacebookScanProgress> progress, CancellationToken token);
+}
+
 public sealed record CampaignProgress(int Success, int Failed, int Skipped, int Replies, string Message);
 public sealed record ProfileRunResult(int Success, int Failed, int Skipped, int Replies);
 

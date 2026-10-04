@@ -44,6 +44,9 @@ namespace TikTokGPMTool
 					services.AddSingleton<IActionHistoryService, ActionHistoryService>();
 					services.AddSingleton<ITikTokAutomationService, TikTokAutomationService>();
 					services.AddSingleton<ICampaignRunner, CampaignRunner>();
+					services.AddSingleton<IFacebookUidStore, FacebookUidStore>();
+					services.AddSingleton<IFacebookGroupScanner, FacebookGroupScanner>();
+					services.AddSingleton<IFacebookScanRunner, FacebookScanRunner>();
 				});
 		}
 
